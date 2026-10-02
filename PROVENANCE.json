@@ -1,0 +1,13 @@
+{
+  "sourceRepository": "https://github.com/microsoft/amplifier-unified",
+  "sourceRevision": "95e96851b799b2e63c44344d69457ca044572c45",
+  "files": {
+    "amplifier_portability/capsule.py": "5d801f00e2c5aa5993186634aa0aefcafe2dd976c9edaa74c9579c0ba3b41a44",
+    "amplifier_portability/protocol.py": "199092e2cc8091eda7fb8b6adffd3f637eab46da4e60d71797eb6e49c6e211ba",
+    "amplifier_portability/__init__.py": "9559ebf86856b5b4327a3a5baa0ab7a4d4da7e0b69480d894707bf5543948ec5",
+    "tests/test_portability_protocol.py": "d0a1963748fc834247324b94b384bd55ac7219f70ba118e94dc08827b2fe23db",
+    "tests/test_portability_capsule.py": "21dbe73b78f07ac9cf16b68a8ef6be4476881cfe9e7809930e18e7e935c4d898"
+  },
+  "testSelection": "complete standalone files",
+  "boundary": "Extracted library; application integration cases remain in distribution acceptance, not replaced with skips."
+}
