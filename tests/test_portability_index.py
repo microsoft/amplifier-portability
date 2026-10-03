@@ -57,10 +57,22 @@ def test_25k_latest_query_is_indexed_and_metadata_only(tmp_path):
 
 def test_evidence_unicode_integrity_bounds_and_partial_review():
     value=envelope('operations',3,{'z':'\u96ea','a':[1,True,None]})
-    assert canonical_bytes(value['body'])==b'{"a":[1,true,null],"z":"\xe9\x9b\xaa"}'
+    assert value['bodyJson'].encode()==b'{"a":[1,true,null],"z":"\xe9\x9b\xaa"}'
     assert verify(value)==value
-    with pytest.raises(ValueError):verify({**value,'body':{}})
+    with pytest.raises(ValueError):verify({**value,'bodyJson':'{}'})
     with pytest.raises(ValueError):envelope('operations',3,{'n':float('nan')})
     partial=envelope('operations',3,{},omissions=[{'kind':'output','reason':'byte-limit'}])
     with pytest.raises(ValueError,match='preview'):verify(partial)
     assert verify(partial,accept_partial=True)['executionAuthority'] is False
+
+
+def test_evidence_preserves_foreign_number_serialization_and_scans_decoded_fields():
+    import hashlib
+    from amplifier_portability.evidence import decode_body
+    value=envelope('resources',1,{})
+    raw=b'{"a":1.0,"tiny":1e-7}'
+    foreign={**value,'bodyJson':raw.decode(),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
+    assert decode_body(foreign)=={'a':1.0,'tiny':1e-7}
+    for raw in (b'{"apiKey":"dangerous-value"}',b'{"x":1,"x":2}'):
+        bad={**value,'bodyJson':raw.decode(),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
+        with pytest.raises(ValueError):verify(bad)

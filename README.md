@@ -25,11 +25,13 @@ Receipt files are owner-managed; external edits require explicit index rebuild.
 
 ## Owner evidence
 
-`amplifier_portability.evidence` exposes `canonical_bytes`, `envelope`, and
-`verify`. Canonical bytes are UTF-8 JSON, recursively sorted keys, compact
+`amplifier_portability.evidence` exposes `canonical_bytes`, `envelope`, `verify`, and `decode_body`. Canonical bytes are UTF-8 JSON, recursively sorted keys, compact
 separators, `ensure_ascii=False`, with nonfinite numbers rejected. The SHA-256 and
-byte count cover those exact body bytes. Each owner has an 8 MiB maximum; combined
-capsule bounds still apply. Envelopes carry owner/version/revision/body, explicit
+byte count cover the exact UTF-8 `bodyJson` string with `encoding:json-utf8`.
+Transport never reserializes this string, avoiding cross-language number/Unicode
+ordering drift. Verification rejects duplicate JSON keys and validates decoded
+credential fields recursively; the string is not a scanning bypass. Each owner has an 8 MiB maximum; combined
+capsule bounds still apply. Envelopes carry owner/version/revision/bodyJson/encoding, explicit
 omissions and `executionAuthority:false`. Partial evidence requires explicit
 preview acceptance. Paired-host authentication and owner-specific schemas remain
 with the composition and evidence owner, respectively. Jobs, approvals, schedules,
