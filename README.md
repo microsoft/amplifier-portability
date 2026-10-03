@@ -36,3 +36,15 @@ omissions and `executionAuthority:false`. Partial evidence requires explicit
 preview acceptance. Paired-host authentication and owner-specific schemas remain
 with the composition and evidence owner, respectively. Jobs, approvals, schedules,
 client drafts and credentials gain no authority from historical evidence.
+
+## Optional detached historical bodies
+
+`amplifier_portability.payloads.PayloadStore` captures explicit attachment/resource
+selections into immutable manifests and binary chunks. `build` streams source
+files without changing them; `page` reads one bounded metadata page; `read` and
+`put` exchange bounded verified blobs; explicit `audit` checks selected whole
+bodies before claiming availability. Missing bodies refuse audit. Omissions need
+explicit partial review, and every result remains inactive historical evidence.
+See [payload contract v1](docs/payload-contract.v1.md) for bounds and required
+negotiation/authentication. Existing transfer receipt v1 and inline evidence v1
+remain compatible. This seam is not yet composed into Unified's resource adapter.

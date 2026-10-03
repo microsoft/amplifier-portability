@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-03",
+  "baseline": "25bc91cfd0731c1b53b87f5171f380a8035620a5",
+  "packageVersion": "0.1.1",
+  "installedLibrary": {
+    "python3.11.14": {"passed": 187, "skipped": 0},
+    "python3.13.11": {"passed": 187, "skipped": 0},
+    "execution": "python -I -m pytest tests; package imports resolve to separate installed site-packages, not the repository",
+    "worktreesSource": "microsoft/amplifier-foundation@8462030de39e2f86beda8b7758925520683e3678/libraries/worktrees"
+  },
+  "independentPayloadConsumers": {
+    "sourcePython": "3.13.11",
+    "destinationPython": "3.11.14",
+    "bytes": 10800005,
+    "sourceAndDestinationSha256": "3526b5094dae6255bbbcc47b3ad0a07685c4309cbfd628865069ede3a0cf68df",
+    "omitted": 1,
+    "missingTransportRefused": true,
+    "executionAuthority": false,
+    "replayed": false
+  },
+  "nativeTransferCompatibility": {
+    "passed": 1,
+    "skipped": 0,
+    "distributionRevision": "c4968233ba623b02b7cd30a79a908e2f078a911f",
+    "nativeRevision": "f530e541d6e6a32f250c76dc16ef40c6eaec6564",
+    "installation": "Two separate task-owned Python3.13 environments each install the exact ACP wheel; dependency packages reference sealed read-only peer environments. Separate candidate-library owner environments, local state/homes/ports, installed distribution public API. No shared environment mutations.",
+    "assertions": ["canonical transcript bytes preserved on both hosts", "workspace bytes preserved", "original source execution fenced", "questions/artifacts imported as inactive historical evidence", "destination model input never replayed"],
+    "fixtureCorrection": "Initial harness mixed Python3.11 with sealed Python3.13 compiled dependencies; corrected harness to Python3.13 before starting new disposable hosts. Original failure log retained."
+  },
+  "limits": [
+    "Detached payloads are not composed into product resource/portability adapters; negotiated authenticated import and complete audit are required.",
+    "Expiration is an explicit caller-observed omission in the transport fixture; library does not implement transport leases.",
+    "No remote Spark, browser, physical device, external provider/account or deployment acceptance.",
+    "Local native provider fixture composes actual Core/ Foundation; dependencies are shared read-only, not duplicate full runtime installations.",
+    "Source capture refuses mutation; synchronized-workspace and symbolic temporary-path fixture attempts refused sealing. Successful payload probe used a resolved task-owned disposable directory."
+  ]
+}
