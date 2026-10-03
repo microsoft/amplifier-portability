@@ -29,7 +29,10 @@ explicit omissions; automatic truncation is forbidden. Cursors bind to one exact
 immutable root hash. Selected page reads load one page and zero body chunks.
 Explicit `audit` streams every included body to check whole hashes, unique ids,
 counts and aggregate bytes, holding only bounded chunks/pages plus selected ids.
-It is a review/qualification operation, never an ordinary admission path.
+It preflights every bounded metadata page, unique id and aggregate declared byte
+budget before reading any body. A second bounded page pass verifies bodies only
+after metadata qualifies. It is a review/qualification operation, never an
+ordinary admission path.
 
 All plans, rows and audit receipts have `executionAuthority:false`. Omitted rows
 remain omitted even after a successful audit. Partial plans require explicit
@@ -60,3 +63,9 @@ whole-byte hashes. The trusted composition performs audit; a client-supplied
 Boolean verification claim is insufficient. Selected historical reads become
 available only after the existing independently verified signed release. This
 proposed consumer port is not implemented or qualified by the library PR.
+
+Consumer limits must be negotiated before selection. The current resource-owner
+candidate accepts at most 500 records and 200 characters per resource id, while
+this library allows 10,000 ids and 1,024 UTF-8 bytes per id. Composition must refuse
+an incompatible selection or produce a newly reviewed compatible selection with
+explicit omissions. It must never shorten ids or silently drop records.

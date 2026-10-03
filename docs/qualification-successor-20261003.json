@@ -1,0 +1,14 @@
+{
+  "packageVersion": "0.1.2",
+  "predecessorCommit": "6d341229138f385e6b967d3c584ba35fbe3ebf15",
+  "scope": "Concrete P2 audit byte-budget correction only; complete immutable metadata preflight before any body verification.",
+  "targetedTests": {
+    "source": {"passed": 24, "skipped": 0},
+    "installedPython3.11.14": {"passed": 24, "skipped": 0},
+    "installedPython3.13.11": {"passed": 24, "skipped": 0},
+    "selection": ["tests/test_portability_payloads.py", "tests/test_portability_index.py"],
+    "regression": "17 unique 64MiB rows claiming 1GiB, understated totals, inconsistent omissions and duplicate IDs all refuse before any verify_resource call; no large body allocations or reads."
+  },
+  "compatibility": "Signed transfer v1, owner evidence v1, native execution, transport and historical receipt formats unchanged. Predecessor full 187-test suites and two-native-host evidence remain explicitly version0.1.1; not repeated as successor whole-product acceptance.",
+  "negotiation": "Resource consumer500records/200-character IDs versus producer10000IDs/1024UTF8 bytes: refuse incompatible selections or rebuild reviewed selections with explicit omissions; no truncation."
+}

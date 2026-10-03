@@ -176,3 +176,35 @@ def test_resource_bounds_and_duplicate_json_are_rejected(tmp_path):
     with pytest.raises(ValueError, match='omission'):
         store.build('resources', 1, [{'id': 'large', 'path': path}])
     assert path.stat().st_size == 64 * 1024 * 1024 + 1
+
+
+@pytest.mark.parametrize('case', ['over-budget', 'understated-total', 'wrong-omissions', 'duplicate'])
+def test_audit_preflights_all_metadata_before_any_body_read(tmp_path, monkeypatch, case):
+    from amplifier_portability.payloads import MAX_RESOURCE_BYTES, MAX_TOTAL_BYTES
+    store = PayloadStore(tmp_path / 'store')
+    chunk = {'sha256': '0' * 64, 'bytes': CHUNK_BYTES}
+    count = 17 if case == 'over-budget' else 2
+    rows = [{'id': f'resource-{i}', 'executionAuthority': False, 'disposition': 'included',
+             'bytes': MAX_RESOURCE_BYTES, 'sha256': '0' * 64,
+             'chunks': [chunk] * (MAX_RESOURCE_BYTES // CHUNK_BYTES)} for i in range(count)]
+    if case == 'duplicate':
+        rows[-1]['id'] = rows[0]['id']
+    pages = []
+    for offset in range(0, len(rows), 10):
+        selected = rows[offset:offset + 10]; raw = canonical_bytes(selected)
+        pages.append({'sha256': store.put(raw), 'bytes': len(raw), 'items': len(selected)})
+    total = MAX_TOTAL_BYTES if case == 'over-budget' else MAX_RESOURCE_BYTES * count
+    if case == 'understated-total':
+        total -= 1
+    omitted = 1 if case == 'wrong-omissions' else 0
+    plan = seal({'version': 1, 'owner': 'resources', 'revision': 1, 'items': count,
+                 'bytes': total, 'omitted': omitted, 'pages': pages,
+                 'executionAuthority': False, 'disposition': 'partial' if omitted else 'complete'})
+    calls = []
+    def body_read(row):
+        calls.append(row['id'])
+        raise AssertionError('Body verification must follow complete metadata preflight')
+    monkeypatch.setattr(store, 'verify_resource', body_read)
+    with pytest.raises(ValueError, match='aggregate|Duplicate'):
+        store.audit(plan, accept_partial=True)
+    assert calls == []

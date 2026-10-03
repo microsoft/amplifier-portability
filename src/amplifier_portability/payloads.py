@@ -252,14 +252,25 @@ class PayloadStore:
                 if row['id'] in seen:
                     raise ValueError('Duplicate resource identity across manifest pages')
                 seen.add(row['id'])
-                receipt = self.verify_resource(row)
-                total += receipt.get('bytes', 0)
-                omitted += receipt['status'] == 'omitted'
+                total += row.get('bytes', 0)
+                omitted += row['disposition'] == 'omitted'
+                if total > MAX_TOTAL_BYTES or total > body['bytes']:
+                    raise ValueError('Manifest aggregate byte budget exceeded')
             cursor = page['nextCursor']
             if cursor is None:
                 break
         if total != body['bytes'] or omitted != body['omitted'] or len(seen) != body['items']:
             raise ValueError('Manifest aggregate counts mismatch')
+        # All immutable metadata must qualify before even the first body read.
+        # Re-read bounded pages rather than retaining every resource descriptor.
+        cursor = None
+        while True:
+            page = self.page(plan, cursor=cursor, accept_partial=accept_partial)
+            for row in page['items']:
+                self.verify_resource(row)
+            cursor = page['nextCursor']
+            if cursor is None:
+                break
         return {'sha256': plan['sha256'], 'items': len(seen), 'bytes': total,
                 'omitted': omitted, 'disposition': body['disposition'],
                 'executionAuthority': False, 'replayed': False}
