@@ -2,6 +2,11 @@
 
 Reusable paired-host transfer, signed receipts and workspace capsules. Native runtime admission and network authorization belong to callers.
 
+Start with the [local vision](docs/VISION.md) and
+[versioned contract entry point](docs/contract.v1.md). They map inherited family
+direction to public promises, executable checks, consumer duties and unqualified
+integration boundaries.
+
 ## Standalone qualification
 
 Build with `uv build`. Install the wheel in a separate environment and run `python -m pytest tests`. Tests must not import Unified implementation or native runtime packages. `PROVENANCE.json` records extraction sources. The distribution owns host integration and real-account acceptance.
