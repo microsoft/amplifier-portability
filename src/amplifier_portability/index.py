@@ -4,7 +4,7 @@ A committed pending entry precedes every canonical write. A crash cannot hide a
 new fence behind an old index. Selected reads repair only those exact entries;
 missing or unreadable canonical data refuses admission rather than assuming idle.
 """
-from contextlib import contextmanager
+from contextlib import contextmanager,closing
 import base64
 import json
 import os
@@ -38,7 +38,7 @@ class ReceiptIndex:
         existing=os.path.lexists(self.path)
         partial=False
         if existing:
-            with sqlite3.connect(self.path.as_uri()+'?mode=ro',uri=True) as prior:
+            with closing(sqlite3.connect(self.path.as_uri()+'?mode=ro',uri=True)) as prior:
                 partial=not complete(prior)
         with self.connect() as db:
             if partial:self.maintenance(db)

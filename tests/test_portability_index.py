@@ -152,3 +152,28 @@ def test_index_fifo_refuses_before_sqlite_open(tmp_path,monkeypatch,suffix):
         patch.setattr(sqlite3,'connect',deny)
         with pytest.raises(IndexMigrationRequired,match='regular'):ReceiptIndex(SimpleNamespace(directory=tmp_path))
     assert path.is_fifo()
+
+
+@pytest.mark.parametrize('outcome',['healthy','partial','exception'])
+def test_preflight_connections_close_without_garbage_collection(tmp_path,monkeypatch,outcome):
+    import amplifier_portability.index as module
+    node=TransferNode(tmp_path,'Test')
+    if outcome=='partial':
+        with sqlite3.connect(node.index.path) as db:db.execute('DROP TABLE rows')
+    connect=sqlite3.connect;held=[]
+    def tracked(*args,**kwargs):
+        db=connect(*args,**kwargs)
+        if kwargs.get('uri') and '?mode=ro' in str(args[0]):held.append(db)
+        return db
+    def fail(db):raise RuntimeError('interrupted schema inspection')
+    with monkeypatch.context() as patch:
+        patch.setattr(sqlite3,'connect',tracked)
+        if outcome=='exception':patch.setattr(module,'complete',fail)
+        for _ in range(12):
+            if outcome=='exception':
+                with pytest.raises(RuntimeError):TransferNode(tmp_path,'Test')
+            else:TransferNode(tmp_path,'Test')
+    assert len(held)==12
+    # Strong references prevent collection from hiding missing close calls.
+    for db in held:
+        with pytest.raises(sqlite3.ProgrammingError,match='closed'):db.execute('SELECT 1')
