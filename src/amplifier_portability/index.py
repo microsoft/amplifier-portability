@@ -4,23 +4,63 @@ A committed pending entry precedes every canonical write. A crash cannot hide a
 new fence behind an old index. Selected reads repair only those exact entries;
 missing or unreadable canonical data refuses admission rather than assuming idle.
 """
-from contextlib import contextmanager
+from contextlib import contextmanager,closing
 import base64
 import json
 import os
 from pathlib import Path
 import sqlite3
+import stat
 
 FIELDS=('id','sessionId','generation','source','destination','direction','phase','revision','createdAt','updatedAt','inputsReplayed','previousPhase','detail')
 
 class IndexMigrationRequired(ValueError):pass
 
+PROFILE={'rows':'id,session,generation,created,phase,body','pending':'id,session','metadata':'key,value'}
+
+def complete(db):
+    """Fixed schema and two singleton checks; never inspect receipt history."""
+    try:
+        for table,columns in PROFILE.items():
+            if db.execute('SELECT type FROM sqlite_master WHERE name=?',(table,)).fetchone()!=('table',):return False
+            db.execute(f'SELECT {columns} FROM {table} LIMIT 0')
+        ready=db.execute("SELECT value FROM metadata WHERE key='ready'").fetchone()
+        revision=db.execute("SELECT value FROM metadata WHERE key='revision'").fetchone()
+        return ready is not None and ready[0] in (0,1) and revision is not None and type(revision[0]) is int and revision[0]>=0
+    except sqlite3.DatabaseError:return False
+
 class ReceiptIndex:
     def __init__(self,node):
         self.node=node;self.path=node.directory/'receipts.sqlite3'
-        if self.path.is_symlink():raise ValueError('Receipt index cannot be a symbolic link')
+        for suffix in ('','-wal','-shm','-journal'):
+            path=Path(str(self.path)+suffix)
+            if os.path.lexists(path) and not stat.S_ISREG(os.lstat(path).st_mode):raise IndexMigrationRequired('Receipt index storage must be regular non-symbolic files; explicit maintenance is required')
+        existing=os.path.lexists(self.path)
+        partial=False
+        if existing:
+            with closing(sqlite3.connect(self.path.as_uri()+'?mode=ro',uri=True)) as prior:
+                partial=not complete(prior)
         with self.connect() as db:
-            db.executescript('''CREATE TABLE IF NOT EXISTS rows(id TEXT PRIMARY KEY,session TEXT NOT NULL,generation INTEGER NOT NULL,created REAL NOT NULL,phase TEXT NOT NULL,body TEXT NOT NULL);
+            if partial:self.maintenance(db)
+            self.schema(db)
+            ready=db.execute("SELECT value FROM metadata WHERE key='ready'").fetchone()
+            if not partial and ready is None:
+                directory=node.directory/'receipts'
+                exists=False
+                if directory.exists():
+                    with os.scandir(directory) as entries:exists=any(x.name.endswith('.json') for x in entries)
+                db.execute("INSERT INTO metadata VALUES('ready',?)",(int(not exists),))
+                db.execute("INSERT INTO metadata VALUES('revision',0)")
+    @staticmethod
+    def maintenance(db):
+        # executescript commits before DDL; persist the fence before any missing
+        # derived table can be recreated, including interruption during repair.
+        db.execute('CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value INTEGER NOT NULL)')
+        db.execute("INSERT OR REPLACE INTO metadata VALUES('ready',0)")
+        db.execute("INSERT OR IGNORE INTO metadata VALUES('revision',0)");db.commit()
+    @staticmethod
+    def schema(db):
+        db.executescript('''CREATE TABLE IF NOT EXISTS rows(id TEXT PRIMARY KEY,session TEXT NOT NULL,generation INTEGER NOT NULL,created REAL NOT NULL,phase TEXT NOT NULL,body TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS rows_latest ON rows(session,generation DESC,created DESC,id DESC);
             CREATE INDEX IF NOT EXISTS rows_page ON rows(created DESC,id DESC);
             CREATE INDEX IF NOT EXISTS rows_session_page ON rows(session,created DESC,id DESC);
@@ -28,14 +68,6 @@ class ReceiptIndex:
             CREATE TABLE IF NOT EXISTS pending(id TEXT PRIMARY KEY,session TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS pending_session ON pending(session,id);
             CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value INTEGER NOT NULL);''')
-            ready=db.execute("SELECT value FROM metadata WHERE key='ready'").fetchone()
-            if ready is None:
-                directory=node.directory/'receipts'
-                exists=False
-                if directory.exists():
-                    with os.scandir(directory) as entries:exists=any(x.name.endswith('.json') for x in entries)
-                db.execute("INSERT INTO metadata VALUES('ready',?)",(int(not exists),))
-                db.execute("INSERT INTO metadata VALUES('revision',0)")
     @contextmanager
     def connect(self):
         db=sqlite3.connect(self.path);db.execute('PRAGMA journal_mode=WAL');db.execute('PRAGMA synchronous=FULL')
@@ -44,7 +76,7 @@ class ReceiptIndex:
             with db:yield db
         finally:db.close()
     def require_ready(self,db):
-        if not db.execute("SELECT value FROM metadata WHERE key='ready'").fetchone()[0]:raise IndexMigrationRequired('Existing transfer receipts require explicit rebuild_index maintenance before indexed admission')
+        if not complete(db) or not db.execute("SELECT value FROM metadata WHERE key='ready'").fetchone()[0]:raise IndexMigrationRequired('Existing transfer receipts require explicit rebuild_index maintenance before indexed admission')
     @staticmethod
     def put(db,row):
         summary={k:row[k] for k in FIELDS if k in row}
@@ -105,7 +137,7 @@ class ReceiptIndex:
     def rebuild(self):
         """Explicit offline maintenance, linear disk scan, constant row memory."""
         with self.node.lock,self.connect() as db:
-            db.execute("UPDATE metadata SET value=0 WHERE key='ready'");db.commit()
+            self.maintenance(db);self.schema(db)
             db.execute('DELETE FROM rows');count=0;directory=self.node.directory/'receipts'
             if directory.exists():
                 with os.scandir(directory) as entries:
@@ -113,6 +145,11 @@ class ReceiptIndex:
                         if not entry.name.endswith('.json'):continue
                         if not entry.is_file(follow_symlinks=False):raise ValueError('Canonical transfer receipt is not a regular file')
                         row=self.node.get(entry.name[:-5]);self.put(db,row);count+=1
-            db.execute('DELETE FROM pending');db.execute("UPDATE metadata SET value=1 WHERE key='ready'")
+            # A missing canonical write has no receipt to reconstruct. Keep its
+            # original pending identity and maintenance fence for inspection.
+            db.execute('DELETE FROM pending WHERE id IN (SELECT id FROM rows)')
+            if db.execute('SELECT 1 FROM pending LIMIT 1').fetchone():
+                raise IndexMigrationRequired('Transfer write outcome is unresolved; inspect its exact receipt before rebuild')
+            db.execute("UPDATE metadata SET value=1 WHERE key='ready'")
             db.execute("UPDATE metadata SET value=value+1 WHERE key='revision'")
             return {'indexed':count,'replayed':False}
