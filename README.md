@@ -53,3 +53,14 @@ explicit partial review, and every result remains inactive historical evidence.
 See [payload contract v1](docs/payload-contract.v1.md) for bounds and required
 negotiation/authentication. Existing transfer receipt v1 and inline evidence v1
 remain compatible. This seam is not yet composed into Unified's resource adapter.
+
+A partially missing index schema or missing readiness/revision metadata also
+requires explicit rebuild maintenance. Startup checks only fixed schema metadata
+and singleton rows; it does not scan canonical history. Rebuild retains unresolved
+pending identities whose canonical receipts are missing and keeps admission fenced
+until those original outcomes can be inspected. Canonical receipt bytes are unchanged.
+
+The maintenance fence commits before derived schema recreation, so interruption
+during repair cannot expose a falsely ready empty index. Non-regular or symbolic
+index files and sidecars refuse before SQLite opens; inspect that filesystem
+evidence explicitly before attempting ordinary offline rebuilding.

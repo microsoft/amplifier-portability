@@ -76,3 +76,79 @@ def test_evidence_preserves_foreign_number_serialization_and_scans_decoded_field
     for raw in (b'{"apiKey":"dangerous-value"}',b'{"x":1,"x":2}'):
         bad={**value,'bodyJson':raw.decode(),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
         with pytest.raises(ValueError):verify(bad)
+
+
+@pytest.mark.parametrize('damage',['rows','pending','metadata','ready','revision'])
+def test_partial_index_requires_explicit_rebuild_without_startup_history_scan(tmp_path,monkeypatch,damage):
+    node=TransferNode(tmp_path,'Test');row=record();row['phase']='unknown';node.save(row)
+    before=node.path(row['id']).read_bytes()
+    with sqlite3.connect(node.index.path) as db:
+        if damage in {'ready','revision'}:db.execute('DELETE FROM metadata WHERE key=?',(damage,))
+        else:db.execute('DROP TABLE '+damage)
+    def deny(*args,**kwargs):raise AssertionError('Partial schema detection must not scan canonical history')
+    with monkeypatch.context() as patch:
+        patch.setattr('amplifier_portability.index.os.scandir',deny)
+        restarted=TransferNode(tmp_path,'Test')
+        with pytest.raises(IndexMigrationRequired):restarted.fenced('selected')
+        with pytest.raises(IndexMigrationRequired):restarted.page()
+    assert node.path(row['id']).read_bytes()==before
+    assert restarted.rebuild_index()=={'indexed':1,'replayed':False}
+    assert restarted.fenced('selected') and restarted.latest('selected')['phase']=='unknown'
+    assert node.path(row['id']).read_bytes()==before
+    assert TransferNode(tmp_path,'Test').fenced('selected')
+
+
+def test_rebuild_preserves_pending_write_without_canonical_receipt(tmp_path):
+    node=TransferNode(tmp_path,'Test');row=record();node.index.prepare(row)
+    with sqlite3.connect(node.index.path) as db:db.execute('DROP TABLE rows')
+    restarted=TransferNode(tmp_path,'Test')
+    with pytest.raises(IndexMigrationRequired,match='unresolved'):restarted.rebuild_index()
+    with sqlite3.connect(node.index.path) as db:
+        assert db.execute('SELECT id,session FROM pending').fetchall()==[(row['id'],'selected')]
+    with pytest.raises(IndexMigrationRequired):restarted.fenced('selected')
+    durable(node.path(row['id']),row)
+    assert restarted.rebuild_index()=={'indexed':1,'replayed':False}
+    assert restarted.fenced('selected')
+
+
+def test_partial_schema_in_open_index_refuses_false_empty(tmp_path):
+    node=TransferNode(tmp_path,'Test');row=record();node.save(row)
+    with sqlite3.connect(node.index.path) as db:db.execute('DROP TABLE rows')
+    with pytest.raises(IndexMigrationRequired):node.fenced('selected')
+    assert node.rebuild_index()=={'indexed':1,'replayed':False}
+    assert node.fenced('selected')
+
+
+@pytest.mark.parametrize('operation',['startup','rebuild'])
+def test_maintenance_fence_commits_before_partial_schema_repair(tmp_path,monkeypatch,operation):
+    from amplifier_portability.index import ReceiptIndex
+    node=TransferNode(tmp_path,'Test');row=record();node.save(row)
+    with sqlite3.connect(node.index.path) as db:db.execute('DROP TABLE rows')
+    schema=ReceiptIndex.schema
+    def interrupted(db):
+        schema(db)
+        raise OSError('lost schema repair acknowledgement')
+    with monkeypatch.context() as patch:
+        patch.setattr(ReceiptIndex,'schema',staticmethod(interrupted))
+        with pytest.raises(OSError):
+            if operation=='startup':TransferNode(tmp_path,'Test')
+            else:node.rebuild_index()
+    restarted=TransferNode(tmp_path,'Test')
+    with pytest.raises(IndexMigrationRequired):restarted.fenced('selected')
+    assert restarted.rebuild_index()=={'indexed':1,'replayed':False}
+    assert restarted.fenced('selected')
+
+
+@pytest.mark.parametrize('suffix',['','-wal','-shm','-journal'])
+def test_index_fifo_refuses_before_sqlite_open(tmp_path,monkeypatch,suffix):
+    import os
+    from types import SimpleNamespace
+    from amplifier_portability.index import ReceiptIndex
+    if suffix:
+        with sqlite3.connect(tmp_path/'receipts.sqlite3') as db:db.execute('CREATE TABLE fixture(id)')
+    path=tmp_path/('receipts.sqlite3'+suffix);os.mkfifo(path)
+    def deny(*args,**kwargs):raise AssertionError('Non-regular storage must not open SQLite')
+    with monkeypatch.context() as patch:
+        patch.setattr(sqlite3,'connect',deny)
+        with pytest.raises(IndexMigrationRequired,match='regular'):ReceiptIndex(SimpleNamespace(directory=tmp_path))
+    assert path.is_fifo()
