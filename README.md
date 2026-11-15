@@ -1,66 +1,81 @@
-# Amplifier portability
+# Amplifier Portability
 
-Reusable paired-host transfer, signed receipts and workspace capsules. Native runtime admission and network authorization belong to callers.
+Python tools for moving selected work between explicitly paired hosts. The
+library provides signed transfer receipts, workspace capsules, and verified
+copies of selected historical data.
 
-Start with the [local vision](docs/VISION.md) and
-[versioned contract entry point](docs/contract.v1.md). They map inherited family
-direction to public promises, executable checks, consumer duties and unqualified
-integration boundaries.
+It is intended for applications implementing a reviewed handoff. The application
+still controls host authentication, transport, user approval, and which runtime is
+allowed to continue the work.
 
-## Standalone qualification
+## Get started
 
-Build with `uv build`. Install the wheel in a separate environment and run `python -m pytest tests`. Tests must not import Unified implementation or native runtime packages. `PROVENANCE.json` records extraction sources. The distribution owns host integration and real-account acceptance.
+Use Python 3.11 or later. From a checkout, install the package and its dependencies
+in a virtual environment:
 
-## Bounded public reads
+```sh
+uv venv
+uv pip install .
+```
 
-`TransferNode.latest(session_id)` and `fenced(session_id)` read an indexed metadata
-row; they never hydrate unrelated receipts. `page(sid=None, cursor=None,
-limit=50, phases=None)` returns `{items,nextCursor,revision}`, at most 100 metadata
-rows. Mutation invalidates existing cursors. `get(id)` remains the explicit full
-receipt read. `records()` is a compatibility full export, never an admission path.
-Startup recovery queries only transient receipt phases.
+Create a durable local identity and receipt store in a private directory owned by
+your application:
 
-Canonical signed JSON files remain the evidence source. Before a canonical
-write, a durable indexed pending entry is committed. An interrupted write is
-reconciled only for the selected receipt; missing/unreadable evidence refuses
-admission. Existing stores without an index require explicit `rebuild_index()`
-maintenance. That operation scans receipts once with constant row memory and
-never replays effects. Ordinary selected reads never initiate a historical scan.
-Receipt files are owner-managed; external edits require explicit index rebuild.
+```python
+from amplifier_portability import TransferNode
 
-## Owner evidence
+node = TransferNode('./.portability', label='my-host')
+print(node.identity['id'])
+```
 
-`amplifier_portability.evidence` exposes `canonical_bytes`, `envelope`, `verify`, and `decode_body`. Canonical bytes are UTF-8 JSON, recursively sorted keys, compact
-separators, `ensure_ascii=False`, with nonfinite numbers rejected. The SHA-256 and
-byte count cover the exact UTF-8 `bodyJson` string with `encoding:json-utf8`.
-Transport never reserializes this string, avoiding cross-language number/Unicode
-ordering drift. Verification rejects duplicate JSON keys and validates decoded
-credential fields recursively; the string is not a scanning bypass. Each owner has an 8 MiB maximum; combined
-capsule bounds still apply. Envelopes carry owner/version/revision/bodyJson/encoding, explicit
-omissions and `executionAuthority:false`. Partial evidence requires explicit
-preview acceptance. Paired-host authentication and owner-specific schemas remain
-with the composition and evidence owner, respectively. Jobs, approvals, schedules,
-client drafts and credentials gain no authority from historical evidence.
+Keep that directory private and persistent: it holds the host's signing key and
+transfer records. Creating a node does not pair hosts, move files, or start an
+agent. Follow the [transfer contract](docs/contract.v1.md) when connecting the
+library to your application's trusted pairing and runtime controls.
 
-## Optional detached historical bodies
+## Choose the part you need
 
-`amplifier_portability.payloads.PayloadStore` captures explicit attachment/resource
-selections into immutable manifests and binary chunks. `build` streams source
-files without changing them; `page` reads one bounded metadata page; `read` and
-`put` exchange bounded verified blobs; explicit `audit` checks selected whole
-bodies before claiming availability. Missing bodies refuse audit. Omissions need
-explicit partial review, and every result remains inactive historical evidence.
-See [payload contract v1](docs/payload-contract.v1.md) for bounds and required
-negotiation/authentication. Existing transfer receipt v1 and inline evidence v1
-remain compatible. This seam is not yet composed into Unified's resource adapter.
+- `TransferNode`: signed handoff records and queries for their current state.
+- [Workspace capsules](src/amplifier_portability/capsule.py): capture and restore
+  reviewed workspace changes against an exact source revision.
+- [Owner evidence](src/amplifier_portability/evidence.py): preserve exact JSON
+  bytes and explicit omissions across a transfer.
+- [Historical payloads](docs/payload-contract.v1.md): copy selected attachment or
+  resource bodies with size and digest verification.
 
-A partially missing index schema or missing readiness/revision metadata also
-requires explicit rebuild maintenance. Startup checks only fixed schema metadata
-and singleton rows; it does not scan canonical history. Rebuild retains unresolved
-pending identities whose canonical receipts are missing and keeps admission fenced
-until those original outcomes can be inspected. Canonical receipt bytes are unchanged.
+Treat a capsule as data, not permission to execute its contents. Secret-pattern
+checks cannot prove that arbitrary content is safe to share; review what you send. A missing or uncertain receipt must be inspected, not treated as
+permission to repeat the transfer.
 
-The maintenance fence commits before derived schema recreation, so interruption
-during repair cannot expose a falsely ready empty index. Non-regular or symbolic
-index files and sidecars refuse before SQLite opens; inspect that filesystem
-evidence explicitly before attempting ordinary offline rebuilding.
+## Development
+
+```sh
+uv sync --group dev
+uv run pytest
+uv build
+```
+
+See the [integration contract](docs/contract.v1.md) for API responsibilities and
+supported boundaries.
+
+## Contributing
+
+Most contributions require you to agree to a
+Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
+the rights to use your contribution. For details, visit [Contributor License Agreements](https://cla.opensource.microsoft.com).
+
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide
+a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
+provided by the bot. You will only need to do this once across all repos using our CLA.
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
+contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+## Trademarks
+
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
+trademarks or logos is subject to and must follow
+[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/legal/intellectualproperty/trademarks/usage/general).
+Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
+Any use of third-party trademarks or logos are subject to those third-party's policies.
