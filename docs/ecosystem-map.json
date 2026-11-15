@@ -1,0 +1,100 @@
+{
+  "audience": "Developers implementing reviewed host handoffs",
+  "citations": [
+    {
+      "path": "README.md",
+      "ref": "f47bf739cf11e9bdd65d60092c3d80cdd743a7bb",
+      "sha256": "a7f5ad711afedf07685e50c92daee1648575b3b33c7f6af5dcec04f4245e0d16",
+      "url": "https://github.com/microsoft/amplifier-portability/blob/f47bf739cf11e9bdd65d60092c3d80cdd743a7bb/README.md"
+    },
+    {
+      "path": "docs/contract.v1.md",
+      "ref": "f47bf739cf11e9bdd65d60092c3d80cdd743a7bb",
+      "sha256": "2e8c9b89b835e249298bdca2dfd633648fdd1fdc1f0aac9a1b3810acd14ad078",
+      "url": "https://github.com/microsoft/amplifier-portability/blob/f47bf739cf11e9bdd65d60092c3d80cdd743a7bb/docs/contract.v1.md"
+    }
+  ],
+  "display_name": "Amplifier Portability",
+  "edges": [
+    {
+      "from": "consumer",
+      "relation": "uses",
+      "to": "self"
+    },
+    {
+      "from": "self",
+      "relation": "contains",
+      "to": "receipts"
+    },
+    {
+      "from": "self",
+      "relation": "contains",
+      "to": "capsules"
+    },
+    {
+      "from": "self",
+      "relation": "contains",
+      "to": "history"
+    },
+    {
+      "from": "consumer",
+      "relation": "integrates",
+      "to": "hosts"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "self",
+      "kind": "self",
+      "label": "Amplifier Portability",
+      "repository": "microsoft/amplifier-portability"
+    },
+    {
+      "id": "consumer",
+      "kind": "external",
+      "label": "Embedding application"
+    },
+    {
+      "id": "receipts",
+      "kind": "internal",
+      "label": "Signed transfer receipts"
+    },
+    {
+      "id": "capsules",
+      "kind": "internal",
+      "label": "Workspace capsules"
+    },
+    {
+      "id": "history",
+      "kind": "internal",
+      "label": "Historical data payloads"
+    },
+    {
+      "id": "hosts",
+      "kind": "external",
+      "label": "Explicitly paired hosts"
+    }
+  ],
+  "notes": [
+    "No primary primitive implementation is claimed: this is supporting transfer machinery.",
+    "The application owns host authentication, transport, approvals and which runtime may continue.",
+    "Copying historical conversations does not transfer source ownership or authorize new execution."
+  ],
+  "page_kind": "transfer library",
+  "purpose": "Move selected work between paired hosts using signed receipts and verified copies.",
+  "ref": "f47bf739cf11e9bdd65d60092c3d80cdd743a7bb",
+  "repository": "microsoft/amplifier-portability",
+  "roles": [],
+  "start_cta": {
+    "basis": "Existing approved README route; target release assets/availability not freshly audited in this plan.",
+    "label": "Build a reviewed handoff",
+    "url": "https://github.com/microsoft/amplifier-portability#get-started"
+  },
+  "summary": "A reusable transfer library under application-owned pairing, transport and execution policy.",
+  "supports_roles": [
+    "Agent Instance",
+    "Conversation",
+    "Experience"
+  ],
+  "visibility": "public"
+}

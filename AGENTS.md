@@ -5,3 +5,16 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 Read README.md, docs/VISION.md, docs/contract.v1.md and PROVENANCE.json before changes. Keep runtime and client ownership outside this library. Preserve histories and unknown outcomes; never replay effects to reconstruct state. Build a wheel, test it in an isolated consumer, and run the contract tests before claiming completion. Do not import sibling source trees. Public integration contracts belong with their owning API.
 
 For documentation-only successors, preserve sealed implementation artifacts and record source-file equality; do not rebuild or rerun runtime tests when executable source and contracts are unchanged. Proposed cross-owner obligations remain proposals until their owners approve composition.
+
+## Ecosystem maps
+
+Keep this repository's README and product-page maps aligned with the
+[Constellation map guide](https://github.com/microsoft/amplifier-constellation/blob/main/docs/ecosystem-maps.md)
+and its canonical registry; start with this repository's
+`docs/ecosystem-map.json`. When creating, renaming, splitting, retiring, or
+changing a role, interface, parent, or dependency, inspect incoming and outgoing
+relationships and update every affected parent/consumer map and link, including
+the centralized product pages. Regenerate from source data and synchronize local
+records/images rather than hand-editing generated images. Describe actual
+boundaries and optional choices; a role highlight is not a compatibility claim.
+Documentation work does not authorize deployment or resume paused product work.
