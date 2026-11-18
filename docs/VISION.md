@@ -21,6 +21,9 @@ scope or claim deployed acceptance.
   job, approval, schedule, artifact or model-input authority.
 - Receipt metadata and resource pages remain bounded and cold. One selected read
   does not hydrate unrelated histories or start a native runtime.
+- Existing JSON receipt stores recover without a separate user maintenance step.
+  Lookup preparation belongs at explicit startup recovery, under the existing
+  store lock. Missing pending-write evidence remains an unresolved outcome.
 - Independent callers can install and verify the library without Unified runtime
   imports. Incompatible peers refuse explicitly or accept a reviewed selection
   with explicit omissions, never silently discard required content.

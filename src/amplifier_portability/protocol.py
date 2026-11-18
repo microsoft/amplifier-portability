@@ -357,8 +357,11 @@ class TransferNode:
             return row
 
     def recover(self):
+        # Legacy JSON receipts need lookup metadata once, without a separate user
+        # maintenance step. Healthy stores keep the existing indexed recovery.
+        self.index.recover()
         # Mutation invalidates cursors; consume a bounded transient page each
-        # time. Terminal historical receipts are never hydrated on startup.
+        # time. A ready index does not hydrate terminal historical receipts.
         while True:
             page=self.page(limit=100,phases=['preparing','staging','activating','releasing'])
             if not page['items']:return

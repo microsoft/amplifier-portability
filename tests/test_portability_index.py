@@ -78,7 +78,7 @@ def test_evidence_preserves_foreign_number_serialization_and_scans_decoded_field
         with pytest.raises(ValueError):verify(bad)
 
 
-@pytest.mark.parametrize('damage',['rows','pending','metadata','ready','revision'])
+@pytest.mark.parametrize('damage',['rows','metadata','ready','revision'])
 def test_partial_index_requires_explicit_rebuild_without_startup_history_scan(tmp_path,monkeypatch,damage):
     node=TransferNode(tmp_path,'Test');row=record();row['phase']='unknown';node.save(row)
     before=node.path(row['id']).read_bytes()
@@ -177,3 +177,127 @@ def test_preflight_connections_close_without_garbage_collection(tmp_path,monkeyp
     # Strong references prevent collection from hiding missing close calls.
     for db in held:
         with pytest.raises(sqlite3.ProgrammingError,match='closed'):db.execute('SELECT 1')
+
+
+def test_recover_upgrades_json_first_receipts_without_rewriting_confirmed_history(tmp_path):
+    node=TransferNode(tmp_path,'Test')
+    phases=['preparing','staging','releasing','activating','prepared','ready',
+            'released','active','cancelled','discarded','unknown']
+    rows=[]
+    for phase in phases:
+        row=record();row.update(phase=phase,sessionId=phase,foreign={'exact':[1.0,'雪']})
+        durable(node.path(row['id']),row);rows.append(row)
+    # The predecessor wrote canonical JSON, with no SQLite lookup or pending log.
+    for path in tmp_path.glob('receipts.sqlite3*'):path.unlink()
+    before={row['id']:node.path(row['id']).read_bytes() for row in rows}
+    restarted=TransferNode(tmp_path,'Test')
+    with pytest.raises(IndexMigrationRequired):restarted.fenced('released')
+    restarted.recover()
+    for row in rows:
+        current=restarted.get(row['id'])
+        if row['phase'] in phases[:4]:
+            assert current['phase']=='unknown' and current['previousPhase']==row['phase']
+            assert current['revision']==row['revision']+1
+            assert {k:current[k] for k in row if k not in {'phase','revision','updatedAt'}}=={
+                k:v for k,v in row.items() if k not in {'phase','revision','updatedAt'}}
+        else:
+            assert restarted.path(row['id']).read_bytes()==before[row['id']]
+        assert current['inputsReplayed'] is False
+        assert restarted.fenced(row['sessionId']) is (row['phase'] not in {'active','cancelled'})
+    recovered={row['id']:restarted.path(row['id']).read_bytes() for row in rows}
+    TransferNode(tmp_path,'Test').recover()
+    assert recovered=={row['id']:restarted.path(row['id']).read_bytes() for row in rows}
+
+
+@pytest.mark.parametrize('damage',['rows','metadata','ready','revision'])
+def test_recover_restores_derived_state_with_intact_pending_intent(tmp_path,damage):
+    node=TransferNode(tmp_path,'Test');row=record();row['phase']='released';node.save(row)
+    before=node.path(row['id']).read_bytes()
+    with sqlite3.connect(node.index.path) as db:
+        if damage in {'ready','revision'}:db.execute('DELETE FROM metadata WHERE key=?',(damage,))
+        else:db.execute('DROP TABLE '+damage)
+    restarted=TransferNode(tmp_path,'Test');restarted.recover()
+    assert restarted.fenced('selected') and restarted.latest('selected')['phase']=='released'
+    assert restarted.path(row['id']).read_bytes()==before
+
+
+@pytest.mark.parametrize('restart',[False,True])
+def test_lost_pending_table_refuses_recovery_without_mutating_database(tmp_path,restart):
+    node=TransferNode(tmp_path,'Test');row=record();node.save(row)
+    with sqlite3.connect(node.index.path) as db:db.execute('DROP TABLE pending')
+    db.close()
+    before=node.index.path.read_bytes();canonical=node.path(row['id']).read_bytes()
+    with pytest.raises(IndexMigrationRequired,match='intent'):
+        if restart:TransferNode(tmp_path,'Test')
+        else:node.recover()
+    assert node.index.path.read_bytes()==before
+    assert node.path(row['id']).read_bytes()==canonical
+    with pytest.raises(IndexMigrationRequired,match='intent'):node.rebuild_index()
+
+
+def test_recovery_keeps_missing_canonical_pending_write_fenced(tmp_path):
+    node=TransferNode(tmp_path,'Test');row=record();row['phase']='preparing';node.index.prepare(row)
+    with sqlite3.connect(node.index.path) as db:db.execute('DROP TABLE rows')
+    restarted=TransferNode(tmp_path,'Test')
+    with pytest.raises(IndexMigrationRequired,match='unresolved'):restarted.recover()
+    with sqlite3.connect(node.index.path) as db:
+        assert db.execute('SELECT id,session FROM pending').fetchall()==[(row['id'],'selected')]
+    with pytest.raises(IndexMigrationRequired):restarted.fenced('selected')
+    assert not node.path(row['id']).exists()
+    durable(node.path(row['id']),row)
+    restarted.recover()
+    assert restarted.get(row['id'])['previousPhase']=='preparing'
+    assert restarted.latest('selected')['phase']=='unknown' and restarted.fenced('selected')
+
+
+def test_corrupt_database_is_not_discarded_as_derived_state(tmp_path):
+    node=TransferNode(tmp_path,'Test');row=record();node.save(row)
+    canonical=node.path(row['id']).read_bytes()
+    node.index.path.write_bytes(b'unreadable database may contain unresolved write intent')
+    before=node.index.path.read_bytes()
+    with pytest.raises(sqlite3.DatabaseError):TransferNode(tmp_path,'Test')
+    assert node.index.path.read_bytes()==before and node.path(row['id']).read_bytes()==canonical
+
+
+def test_healthy_recovery_reads_only_transient_receipts(tmp_path,monkeypatch):
+    node=TransferNode(tmp_path,'Test');terminal=record();node.save(terminal)
+    transient=record();transient['phase']='staging';node.save(transient)
+    node.path(terminal['id']).write_text('unrelated terminal receipt is never hydrated')
+    read=Path.read_text;seen=[]
+    def selected(path,*args,**kwargs):
+        assert path==node.path(transient['id']);seen.append(path)
+        return read(path,*args,**kwargs)
+    def deny(*args,**kwargs):raise AssertionError('Healthy recovery must not scan history')
+    with monkeypatch.context() as patch:
+        patch.setattr(Path,'read_text',selected);patch.setattr('amplifier_portability.index.os.scandir',deny)
+        node.recover()
+    assert seen==[node.path(transient['id'])]
+    assert node.get(transient['id'])['phase']=='unknown'
+
+
+@pytest.mark.parametrize('failure',['canonical-json','canonical-identity','index-write'])
+def test_failed_lookup_recovery_stays_fenced_and_can_resume_without_replay(tmp_path,monkeypatch,failure):
+    from amplifier_portability.index import ReceiptIndex
+    node=TransferNode(tmp_path,'Test');row=record();row['phase']='preparing';node.save(row)
+    canonical=node.path(row['id']).read_bytes()
+    with sqlite3.connect(node.index.path) as db:db.execute('DROP TABLE rows')
+    restarted=TransferNode(tmp_path,'Test')
+    put=ReceiptIndex.put
+    def interrupted(db,value):
+        put(db,value)
+        raise OSError('interrupted lookup preparation')
+    with monkeypatch.context() as patch:
+        if failure=='canonical-json':node.path(row['id']).write_text('invalid retained JSON')
+        elif failure=='canonical-identity':node.path(row['id']).write_text(json.dumps({**row,'id':str(uuid.uuid4())}))
+        else:patch.setattr(ReceiptIndex,'put',staticmethod(interrupted))
+        failed_bytes=node.path(row['id']).read_bytes()
+        with pytest.raises((ValueError,OSError)):restarted.recover()
+    with pytest.raises(IndexMigrationRequired):restarted.fenced('selected')
+    if failure.startswith('canonical-'):
+        assert node.path(row['id']).read_bytes()==failed_bytes
+        node.path(row['id']).write_bytes(canonical)
+    else:assert node.path(row['id']).read_bytes()==canonical
+    resumed=TransferNode(tmp_path,'Test');resumed.recover()
+    restored=resumed.get(row['id'])
+    assert restored['phase']=='unknown' and restored['previousPhase']=='preparing'
+    assert restored['inputsReplayed'] is False and resumed.fenced('selected')

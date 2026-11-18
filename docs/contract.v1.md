@@ -37,7 +37,7 @@ owner evidence codec and `PayloadStore`; implementation schemas remain in
 | LP1: authenticate exact transfer identity and preserve a single execution owner through staged ready/release/activation | Another transfer's signed receipt releases work, or lost activation permits source reclaim: [protocol tests](../tests/test_portability_protocol.py), `test_valid_signatures_cannot_substitute_a_different_transfer`, `test_lost_activation_acknowledgement_never_allows_source_reclaim` |
 | LP2: reconcile duplicates and uncertain boundaries without repeating effects | Restart or retry reconstructs state by replay: [protocol tests](../tests/test_portability_protocol.py), `test_restart_marks_unconfirmed_effects_unknown_without_replay`, `test_receive_duplicate_never_replays_destination_work` |
 | LP3: preserve exact selected workspace and owner-evidence bytes, reject unsafe paths/known credential shapes, and require partial review | Capture changes source or canonical text is reserialized: [capsule tests](../tests/test_portability_capsule.py), `test_carry_dirty_preserves_staged_unstaged_untracked_and_source`; [index/evidence tests](../tests/test_portability_index.py), `test_evidence_preserves_foreign_number_serialization_and_scans_decoded_fields` |
-| LP4: receipt admission uses scoped indexed metadata; explicit rebuild/export never becomes an ordinary historical scan | Selected fence reads unrelated receipts or hydrates a full history: [index tests](../tests/test_portability_index.py), `test_selected_fence_and_pages_never_read_unrelated_canonical_files`, `test_25k_latest_query_is_indexed_and_metadata_only` |
+| LP4: receipt admission uses scoped indexed metadata; explicit startup recovery prepares missing lookup state without a user maintenance step, never an ordinary read-time historical scan | Selected fence reads unrelated receipts, healthy recovery hydrates terminal history, or retained JSON needs manual initialization: [index tests](../tests/test_portability_index.py), `test_selected_fence_and_pages_never_read_unrelated_canonical_files`, `test_25k_latest_query_is_indexed_and_metadata_only`, `test_recover_upgrades_json_first_receipts_without_rewriting_confirmed_history`, `test_healthy_recovery_reads_only_transient_receipts` |
 | LP5: immutable historical payload copies stay bounded, independently verifiable and inactive; validate all metadata totals before any body audit | Oversized declared selections read bodies before refusal, missing chunks claim availability, or a page reads unrelated bodies: [payload tests](../tests/test_portability_payloads.py), `test_audit_preflights_all_metadata_before_any_body_read`, `test_lost_transport_has_no_success_and_resume_copies_only_immutable_bytes`, `test_selected_page_does_not_read_unrelated_pages_or_bodies` |
 
 ## Consumer obligations and proposed integration
@@ -50,6 +50,29 @@ hosts. Historical observation alone never authorizes admission or replay.
 Credential scanning detects known shapes only; callers still authorize and review
 selected content and supply network/security policy. Export does not delete source
 history. Private client drafts are not implicitly shared by this library.
+
+Callers invoke `recover()` before admitting work after startup. It may scan
+canonical JSON once to prepare a missing or unready lookup, holding the existing
+store lock and one receipt at a time. Confirmed JSON stays unchanged; only the
+existing interrupted phases become unknown. Healthy recovery remains indexed.
+Constructors and ordinary page/fence reads do not perform this scan.
+
+SQLite stores both derived lookup rows and pending write identities. The latter
+are evidence of an uncertain write, not disposable cache data. Recovery and the
+retained explicit `rebuild_index()` API cannot erase missing pending intent, an
+unreadable database, or a pending identity without its canonical receipt. Such
+cases refuse admission without replay or an invented idle state. A failed lookup
+rebuild remains fenced; once its underlying evidence is restored, ordinary
+startup recovery can resume. No automatic database deletion or transport retry
+is introduced.
+
+The qualification receipt in [`worktrees-source.json`](../worktrees-source.json)
+binds the exact tested public Worktrees source and original artifacts. It does
+not narrow the package's supported dependency ranges. Consumer assembly retains
+its own exact source selection and dependency constraints; Unified's selected
+Worktrees identity and tighter cryptography/filelock bounds remain its boundary.
+This does not change historical qualification records or establish application
+adoption of this source.
 
 The proposed detached resource seam is detailed in [payload contract v1](payload-contract.v1.md):
 negotiated support, exact signed plan/transfer/evidence binding, trusted complete
