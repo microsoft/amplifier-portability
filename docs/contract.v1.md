@@ -66,11 +66,13 @@ rebuild remains fenced; once its underlying evidence is restored, ordinary
 startup recovery can resume. No automatic database deletion or transport retry
 is introduced.
 
-The dependency receipt in [`worktrees-source.json`](../worktrees-source.json)
-binds the exact public Worktrees source and original artifacts. Consumer assembly
-must match it to its selected Worktrees receipt, alongside the declared
-cryptography and filelock bounds. This does not change historical qualification
-records or establish application adoption of this source.
+The qualification receipt in [`worktrees-source.json`](../worktrees-source.json)
+binds the exact tested public Worktrees source and original artifacts. It does
+not narrow the package's supported dependency ranges. Consumer assembly retains
+its own exact source selection and dependency constraints; Unified's selected
+Worktrees identity and tighter cryptography/filelock bounds remain its boundary.
+This does not change historical qualification records or establish application
+adoption of this source.
 
 The proposed detached resource seam is detailed in [payload contract v1](payload-contract.v1.md):
 negotiated support, exact signed plan/transfer/evidence binding, trusted complete

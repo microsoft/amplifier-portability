@@ -43,12 +43,13 @@ Missing or unreadable write intent, or a pending write without its exact receipt
 still refuses recovery. Preserve that evidence and investigate the uncertainty;
 deleting the database is not a repair.
 
-The exact supported Worktrees source and artifacts are recorded in
+The exact Worktrees input for this recovery qualification is recorded in
 [`worktrees-source.json`](worktrees-source.json). Install that original
 `amplifier-worktrees` 0.1.0 wheel when qualifying a consumer; a matching version
 number alone does not establish source identity. This record preserves the
-already-selected public dependency, independently of any future Portability
-release or application adoption.
+tested public dependency without narrowing the package's supported dependency
+ranges. Consumers retain their own source selections and tighter constraints;
+this record does not establish application adoption.
 
 ## Choose the part you need
 
