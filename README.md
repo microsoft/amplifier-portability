@@ -97,6 +97,36 @@ Supports: Agent Instance, Conversation, Experience.
 
 <!-- ecosystem-map:end -->
 
+## Immutable package delivery
+
+The package workflow builds an exact reviewed revision, verifies the wheel and
+source archive against Git, and tests the installed package outside the checkout.
+Its focused checks cover retained receipt recovery, exclusive execution ownership,
+workspace capsules and historical payloads. The existing complete compatibility
+suite remains separate; package checks are not live-host acceptance.
+
+For an accepted commit, the manual workflow may publish the four original assets
+under `portability-v<version>`: wheel, source archive, `portability-source.json`
+and `SHA256SUMS`. The receipt binds the full repository revision/tree and exact
+package inputs, preserving `src/amplifier_portability` source paths and the
+`amplifier_portability` installed namespace. Version 0.1.3 identifies this recovery
+successor; historical qualification and artifacts retain their original bytes.
+
+Installed qualification uses the original public Worktrees artifact named in
+`worktrees-source.json`, verifying its receipt and bytes before installation.
+That selected artifact requires Python 3.13, so this delivery check qualifies
+Python 3.13 only; it does not revalidate the package's supported minimum. This
+does not narrow public dependency ranges or change a consumer's selection.
+Do not co-install this distribution with Unified while Unified owns the same
+import; its artifact selection, tighter dependency constraints and assembly remain
+separate consumer responsibilities.
+
+Publication never moves an existing tag or overwrites an asset. After a lost
+reply, inspect the exact tag/release ID and original bytes before continuing.
+Only matching original assets may resume a draft; never rebuild different bytes
+under an existing tag. No workflow run or source acceptance automatically
+publishes a package or adopts it in an application.
+
 ## Contributing
 
 Most contributions require you to agree to a
