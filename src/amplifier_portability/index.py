@@ -1,8 +1,8 @@
 """Rebuildable receipt metadata index; canonical signed JSON stays authoritative.
 
-A committed pending entry precedes every canonical write. A crash cannot hide a
-new fence behind an old index. Selected reads repair only those exact entries;
-missing or unreadable canonical data refuses admission rather than assuming idle.
+A committed pending entry precedes every canonical write. Those pending identities
+are write intent, not disposable lookup data. Selected reads repair only those
+exact entries; missing or unreadable evidence refuses admission, never assumes idle.
 """
 from contextlib import contextmanager,closing
 import base64
@@ -29,6 +29,12 @@ def complete(db):
         return ready is not None and ready[0] in (0,1) and revision is not None and type(revision[0]) is int and revision[0]>=0
     except sqlite3.DatabaseError:return False
 
+def require_pending(db):
+    """A missing intent table cannot be reconstructed from successful JSON writes."""
+    if db.execute("SELECT type FROM sqlite_master WHERE name='pending'").fetchone()!=('table',):
+        raise IndexMigrationRequired('Transfer write intent is unavailable; preserve the database and inspect its receipts')
+    db.execute('SELECT id,session FROM pending LIMIT 0')
+
 class ReceiptIndex:
     def __init__(self,node):
         self.node=node;self.path=node.directory/'receipts.sqlite3'
@@ -40,6 +46,7 @@ class ReceiptIndex:
         if existing:
             with closing(sqlite3.connect(self.path.as_uri()+'?mode=ro',uri=True)) as prior:
                 partial=not complete(prior)
+                if partial:require_pending(prior)
         with self.connect() as db:
             if partial:self.maintenance(db)
             self.schema(db)
@@ -134,9 +141,16 @@ class ReceiptIndex:
                 after=values[limit-1]
                 next_cursor=base64.urlsafe_b64encode(json.dumps({'revision':revision,'sid':sid,'phases':phases,'after':[after[1],after[2]]},separators=(',',':')).encode()).decode().rstrip('=')
             return {'items':items,'nextCursor':next_cursor,'revision':revision}
+    def recover(self):
+        """Prepare lookup state at the caller's explicit startup recovery boundary."""
+        with self.node.lock:
+            with self.connect() as db:
+                ready=complete(db) and db.execute("SELECT value FROM metadata WHERE key='ready'").fetchone()[0]
+            if not ready:self.rebuild()
     def rebuild(self):
-        """Explicit offline maintenance, linear disk scan, constant row memory."""
+        """Linear disk scan, constant row memory; never replace missing write intent."""
         with self.node.lock,self.connect() as db:
+            require_pending(db)
             self.maintenance(db);self.schema(db)
             db.execute('DELETE FROM rows');count=0;directory=self.node.directory/'receipts'
             if directory.exists():
@@ -144,7 +158,9 @@ class ReceiptIndex:
                     for entry in entries:
                         if not entry.name.endswith('.json'):continue
                         if not entry.is_file(follow_symlinks=False):raise ValueError('Canonical transfer receipt is not a regular file')
-                        row=self.node.get(entry.name[:-5]);self.put(db,row);count+=1
+                        row=self.node.get(entry.name[:-5])
+                        if row['id']!=entry.name[:-5]:raise ValueError('Canonical transfer identity differs from its filename')
+                        self.put(db,row);count+=1
             # A missing canonical write has no receipt to reconstruct. Keep its
             # original pending identity and maintenance fence for inspection.
             db.execute('DELETE FROM pending WHERE id IN (SELECT id FROM rows)')

@@ -25,6 +25,7 @@ your application:
 from amplifier_portability import TransferNode
 
 node = TransferNode('./.portability', label='my-host')
+node.recover()
 print(node.identity['id'])
 ```
 
@@ -32,6 +33,22 @@ Keep that directory private and persistent: it holds the host's signing key and
 transfer records. Creating a node does not pair hosts, move files, or start an
 agent. Follow the [transfer contract](docs/contract.v1.md) when connecting the
 library to your application's trusted pairing and runtime controls.
+
+Call `recover()` before admitting work after a restart. It marks interrupted
+transfers unknown without replaying them. For an older JSON-only store, or damaged
+lookup tables with intact write intent, this also prepares the index under the
+existing store lock. No separate maintenance command is needed. Confirmed JSON
+receipts remain unchanged; a healthy index avoids reading historical receipts.
+Missing or unreadable write intent, or a pending write without its exact receipt,
+still refuses recovery. Preserve that evidence and investigate the uncertainty;
+deleting the database is not a repair.
+
+The exact supported Worktrees source and artifacts are recorded in
+[`worktrees-source.json`](worktrees-source.json). Install that original
+`amplifier-worktrees` 0.1.0 wheel when qualifying a consumer; a matching version
+number alone does not establish source identity. This record preserves the
+already-selected public dependency, independently of any future Portability
+release or application adoption.
 
 ## Choose the part you need
 
