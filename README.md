@@ -114,7 +114,9 @@ successor; historical qualification and artifacts retain their original bytes.
 
 Installed qualification uses the original public Worktrees artifact named in
 `worktrees-source.json`, verifying its receipt and bytes before installation.
-This does not narrow public dependency ranges or change a consumer's selection.
+That selected artifact requires Python 3.13, so this delivery check qualifies
+Python 3.13 only; it does not revalidate the package's supported minimum. This
+does not narrow public dependency ranges or change a consumer's selection.
 Do not co-install this distribution with Unified while Unified owns the same
 import; its artifact selection, tighter dependency constraints and assembly remain
 separate consumer responsibilities.
